@@ -1,0 +1,158 @@
+<Window x:Class="StudentManagementSystem.Views.StudentFormWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Student Form" Height="540" Width="500" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BackgroundBrush}">
+
+    <Grid Margin="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,16">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left"
+                           Text="{Binding IsEdit, Converter={StaticResource FormTitleConverter}}"
+                           FontSize="20" FontWeight="Bold"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           VerticalAlignment="Center"/>
+                <Border DockPanel.Dock="Right"
+                        Background="{StaticResource PrimaryLightBrush}"
+                        CornerRadius="6"
+                        Padding="10,4">
+                    <TextBlock FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource PrimaryBrush}">
+                        <Run Text="{}{Binding IsEdit, Converter={StaticResource FormTitleConverter}, FallbackValue=New Student}"/>
+                    </TextBlock>
+                </Border>
+            </DockPanel>
+        </Border>
+
+        <!-- Form Fields -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="24,20,24,0">
+            <StackPanel>
+                <!-- Registration Number -->
+                <TextBlock Text="Registration Number" Style="{StaticResource FieldLabelStyle}"/>
+                <TextBox Text="{Binding RegistrationNumber, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,14"/>
+
+                <!-- First / Last Name row -->
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="First Name" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox Text="{Binding FirstName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ModernTextBoxStyle}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Last Name" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox Text="{Binding LastName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ModernTextBoxStyle}"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Department -->
+                <TextBlock Text="Department" Style="{StaticResource FieldLabelStyle}"/>
+                <TextBox Text="{Binding Department, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,14"/>
+
+                <!-- Email -->
+                <TextBlock Text="Email" Style="{StaticResource FieldLabelStyle}"/>
+                <TextBox Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,14"/>
+
+                <!-- Phone / Gender row -->
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Phone" Style="{StaticResource FieldLabelStyle}"/>
+                        <TextBox Text="{Binding Phone, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ModernTextBoxStyle}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Gender" Style="{StaticResource FieldLabelStyle}"/>
+                        <ComboBox Text="{Binding Gender}" IsEditable="True"
+                                  Style="{StaticResource ModernComboBoxStyle}">
+                            <ComboBoxItem Content="Male"/>
+                            <ComboBoxItem Content="Female"/>
+                            <ComboBoxItem Content="Other"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Address -->
+                <TextBlock Text="Address" Style="{StaticResource FieldLabelStyle}"/>
+                <TextBox Text="{Binding Address, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource ModernTextBoxStyle}"
+                         Height="60" TextWrapping="Wrap" AcceptsReturn="True"
+                         Margin="0,0,0,14"/>
+
+                <!-- Date of Birth / Enrollment Date -->
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Date of Birth" Style="{StaticResource FieldLabelStyle}"/>
+                        <DatePicker SelectedDate="{Binding DateOfBirth}"
+                                    Style="{StaticResource ModernDatePickerStyle}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Enrollment Date" Style="{StaticResource FieldLabelStyle}"/>
+                        <DatePicker SelectedDate="{Binding EnrollmentDate}"
+                                    Style="{StaticResource ModernDatePickerStyle}"/>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer with Actions -->
+        <Border Grid.Row="2"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="24,14">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left"
+                           Text="{Binding Error}"
+                           Foreground="{StaticResource DangerBrush}"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           MaxWidth="280"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding IsValid, Converter={StaticResource InvertBoolConverter}}"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Cancel"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Command="{Binding CancelCommand}"
+                            Margin="0,0,10,0"/>
+                    <Button Content="Save Student"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Command="{Binding SaveCommand}"
+                            IsDefault="True"
+                            MinWidth="110"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
