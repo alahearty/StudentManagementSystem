@@ -10,6 +10,8 @@
             <converters:FormTitleConverter x:Key="FormTitleConverter"/>
             <converters:CourseFormTitleConverter x:Key="CourseFormTitleConverter"/>
             <converters:InvertBoolConverter x:Key="InvertBoolConverter"/>
+            <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+            <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

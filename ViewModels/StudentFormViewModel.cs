@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows.Input;
 using StudentManagementSystem.Commands;
 using StudentManagementSystem.Models;
+using StudentManagementSystem.Services;
 using StudentManagementSystem.ViewModels.Base;
 
 namespace StudentManagementSystem.ViewModels;
@@ -122,6 +123,8 @@ public sealed class StudentFormViewModel : ViewModelBase, IDataErrorInfo
     {
         if (string.IsNullOrWhiteSpace(RegistrationNumber))
             return "Registration number is required.";
+        if (RegistrationNumber.Trim().Length < 3)
+            return "Registration number must be at least 3 characters.";
         if (string.IsNullOrWhiteSpace(FirstName))
             return "First name is required.";
         if (string.IsNullOrWhiteSpace(LastName))
@@ -130,6 +133,16 @@ public sealed class StudentFormViewModel : ViewModelBase, IDataErrorInfo
             return "Department is required.";
         if (string.IsNullOrWhiteSpace(Email))
             return "Email is required.";
+        if (!ValidationHelper.IsValidEmail(Email))
+            return "Please enter a valid email address.";
+        if (!ValidationHelper.IsValidPhone(Phone))
+            return "Please enter a valid phone number.";
+        if (DateOfBirth.HasValue && !ValidationHelper.IsValidAge(DateOfBirth))
+            return "Age must be between 10 and 120 years.";
+        if (!ValidationHelper.IsNotInFuture(DateOfBirth))
+            return "Date of birth cannot be in the future.";
+        if (!ValidationHelper.IsNotInFuture(EnrollmentDate))
+            return "Enrollment date cannot be in the future.";
         return null;
     }
 

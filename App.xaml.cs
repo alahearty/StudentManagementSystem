@@ -3,7 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using Serilog;
 using StudentManagementSystem.Data;
+using StudentManagementSystem.Models;
+using StudentManagementSystem.Services;
 using StudentManagementSystem.ViewModels;
 using StudentManagementSystem.Views;
 
@@ -12,19 +15,47 @@ namespace StudentManagementSystem;
 public partial class App : Application
 {
     public static ServiceProvider ServiceProvider { get; private set; } = null!;
+    public static User? CurrentUser { get; set; }
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        var services = new ServiceCollection();
-        ConfigureServices(services);
-        ServiceProvider = services.BuildServiceProvider();
+        LogConfig.Initialize();
 
-        InitializeDatabase();
+        try
+        {
+            var services = new ServiceCollection();
+            ConfigureServices(services);
+            ServiceProvider = services.BuildServiceProvider();
 
-        var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
-        mainWindow.Show();
+            InitializeDatabase();
+
+            var loginWindow = ServiceProvider.GetRequiredService<LoginWindow>();
+            var loginVm = (LoginViewModel)loginWindow.DataContext;
+            loginVm.LoginSucceeded += () =>
+            {
+                CurrentUser = loginVm.AuthenticatedUser;
+                Log.Information("User {Username} ({Role}) logged in", CurrentUser?.Username, CurrentUser?.Role);
+                var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
+                mainWindow.Show();
+                loginWindow.Close();
+            };
+
+            loginWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "Application startup failed");
+            MessageBox.Show($"Fatal startup error: {ex.Message}", "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        LogConfig.Shutdown();
+        base.OnExit(e);
     }
 
     private static void InitializeDatabase()
@@ -32,7 +63,8 @@ public partial class App : Application
         try
         {
             using var context = ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext();
-            context.Database.EnsureCreated();
+            MigrateOrBaseline(context);
+            DataSeeder.Seed(ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>());
         }
         catch (PostgresException pgEx) when (pgEx.SqlState == PostgresErrorCodes.InvalidCatalogName)
         {
@@ -40,7 +72,8 @@ public partial class App : Application
             try
             {
                 using var context = ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext();
-                context.Database.EnsureCreated();
+                context.Database.Migrate();
+                DataSeeder.Seed(ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>());
             }
             catch (Exception ex)
             {
@@ -50,6 +83,41 @@ public partial class App : Application
         catch (Exception ex)
         {
             ShowDbError(ex);
+        }
+    }
+
+    private static void MigrateOrBaseline(AppDbContext context)
+    {
+        try
+        {
+            context.Database.Migrate();
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.DuplicateTable)
+        {
+            var needsReset = false;
+
+            try
+            {
+                var connection = context.Database.GetDbConnection();
+                if (connection.State != System.Data.ConnectionState.Open)
+                    connection.Open();
+
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(*) FROM \"__EFMigrationsHistory\"";
+                var count = (long)cmd.ExecuteScalar()!;
+                needsReset = count == 0;
+            }
+            catch
+            {
+                needsReset = true;
+            }
+
+            if (needsReset)
+            {
+                Log.Warning("Database created without migrations — dropping and recreating");
+                context.Database.EnsureDeleted();
+                context.Database.Migrate();
+            }
         }
     }
 
@@ -101,6 +169,8 @@ public partial class App : Application
         services.AddDbContextFactory<AppDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        services.AddTransient<LoginViewModel>();
+        services.AddTransient<LoginWindow>();
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
     }

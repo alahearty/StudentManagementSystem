@@ -1,6 +1,8 @@
+using System.Collections.ObjectModel;
 using System.Windows.Input;
 using StudentManagementSystem.Commands;
 using StudentManagementSystem.Models;
+using StudentManagementSystem.Services;
 using StudentManagementSystem.ViewModels.Base;
 
 namespace StudentManagementSystem.ViewModels;
@@ -12,13 +14,20 @@ public sealed class CourseFormViewModel : ViewModelBase
     private string _description = string.Empty;
     private string _department = string.Empty;
     private int _credits = 3;
+    private int? _prerequisiteCourseId;
 
     private readonly int? _courseId;
 
-    public CourseFormViewModel(Course? course = null)
+    public CourseFormViewModel(Course? course = null, List<Course>? availableCourses = null)
     {
         SaveCommand = new RelayCommand(_ => SaveRequested?.Invoke(), _ => IsValid);
         CancelCommand = new RelayCommand(_ => CancelRequested?.Invoke());
+
+        if (availableCourses is not null)
+        {
+            var filtered = availableCourses.Where(c => c.Id != course?.Id).ToList();
+            AvailableCourses = new ObservableCollection<Course>(filtered);
+        }
 
         if (course is not null)
         {
@@ -28,7 +37,18 @@ public sealed class CourseFormViewModel : ViewModelBase
             _description = course.Description ?? string.Empty;
             _department = course.Department ?? string.Empty;
             _credits = course.Credits;
+            _prerequisiteCourseId = course.PrerequisiteCourseId;
+            SelectedPrerequisiteCourse = AvailableCourses?.FirstOrDefault(c => c.Id == course.PrerequisiteCourseId);
         }
+    }
+
+    public ObservableCollection<Course>? AvailableCourses { get; }
+
+    private Course? _selectedPrerequisiteCourse;
+    public Course? SelectedPrerequisiteCourse
+    {
+        get => _selectedPrerequisiteCourse;
+        set { SetProperty(ref _selectedPrerequisiteCourse, value); _prerequisiteCourseId = value?.Id; }
     }
 
     public string CourseCode
@@ -81,10 +101,12 @@ public sealed class CourseFormViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(CourseCode))
             return "Course code is required.";
+        if (CourseCode.Trim().Length < 2)
+            return "Course code must be at least 2 characters.";
         if (string.IsNullOrWhiteSpace(CourseName))
             return "Course name is required.";
-        if (Credits <= 0)
-            return "Credits must be greater than zero.";
+        if (!ValidationHelper.IsValidCredits(Credits))
+            return "Credits must be between 1 and 12.";
         return null;
     }
 
@@ -97,7 +119,8 @@ public sealed class CourseFormViewModel : ViewModelBase
             CourseName = _courseName.Trim(),
             Description = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
             Department = string.IsNullOrWhiteSpace(_department) ? null : _department.Trim(),
-            Credits = _credits
+            Credits = _credits,
+            PrerequisiteCourseId = _prerequisiteCourseId
         };
     }
 

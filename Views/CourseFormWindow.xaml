@@ -1,7 +1,7 @@
 <Window x:Class="StudentManagementSystem.Views.CourseFormWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Course Form" Height="400" Width="480" ResizeMode="NoResize"
+        Title="Course Form" Height="460" Width="480" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BackgroundBrush}">
 
@@ -72,7 +72,16 @@
             <TextBlock Text="Description" Style="{StaticResource FieldLabelStyle}"/>
             <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
                      Style="{StaticResource ModernTextBoxStyle}"
-                     Height="80" TextWrapping="Wrap" AcceptsReturn="True"/>
+                     Height="80" TextWrapping="Wrap" AcceptsReturn="True"
+                     Margin="0,0,0,14"/>
+
+            <!-- Prerequisite Course -->
+            <TextBlock Text="Prerequisite Course (optional)" Style="{StaticResource FieldLabelStyle}"/>
+            <ComboBox ItemsSource="{Binding AvailableCourses}"
+                      SelectedItem="{Binding SelectedPrerequisiteCourse}"
+                      DisplayMemberPath="CourseName"
+                      Style="{StaticResource ModernComboBoxStyle}"
+                      Margin="0,0,0,14"/>
         </StackPanel>
 
         <!-- Footer -->

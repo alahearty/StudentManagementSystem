@@ -1,0 +1,75 @@
+<Window x:Class="StudentManagementSystem.Views.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Student Management System - Login" Height="420" Width="400"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BackgroundBrush}">
+    <Grid>
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="300">
+            <Border Background="{StaticResource PrimaryLightBrush}"
+                    CornerRadius="12"
+                    Padding="12"
+                    Width="48" Height="48"
+                    HorizontalAlignment="Center"
+                    Margin="0,0,0,16">
+                <TextBlock Text="&#x1F393;"
+                           FontSize="24"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"/>
+            </Border>
+
+            <TextBlock Text="Student Management System"
+                       FontSize="22" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Margin="0,0,0,4"/>
+
+            <TextBlock Text="Sign in to your account"
+                       FontSize="13"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,28"/>
+
+            <TextBlock Text="Username"
+                       Style="{StaticResource FieldLabelStyle}"
+                       Margin="0,0,0,4"/>
+            <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource ModernTextBoxStyle}"
+                     Height="40"
+                     Margin="0,0,0,14"/>
+
+            <TextBlock Text="Password"
+                       Style="{StaticResource FieldLabelStyle}"
+                       Margin="0,0,0,4"/>
+            <PasswordBox x:Name="PasswordBox"
+                          Style="{StaticResource ModernPasswordBoxStyle}"
+                         Height="40"
+                         Margin="0,0,0,20"
+                         PasswordChar="●"/>
+
+            <TextBlock Text="{Binding Error}"
+                       Foreground="{StaticResource DangerBrush}"
+                       FontSize="12"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,14"
+                       Visibility="{Binding Error, Converter={StaticResource StringToVisibilityConverter}, FallbackValue=Collapsed}"/>
+
+            <Button Content="Sign In"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Command="{Binding LoginCommand}"
+                    IsDefault="True"
+                    Height="40"
+                    FontSize="14"/>
+
+            <TextBlock HorizontalAlignment="Center"
+                       Margin="0,14,0,0"
+                       FontSize="11"
+                       Foreground="{StaticResource TextMutedBrush}">
+                <Run Text="Default: admin / admin123"/>
+            </TextBlock>
+        </StackPanel>
+    </Grid>
+</Window>
