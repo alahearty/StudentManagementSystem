@@ -11,6 +11,8 @@
             <converters:CourseFormTitleConverter x:Key="CourseFormTitleConverter"/>
             <converters:InvertBoolConverter x:Key="InvertBoolConverter"/>
             <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+            <converters:BoolToStatusConverter x:Key="BoolToStatusConverter"/>
+            <converters:PercentageToWidthConverter x:Key="PercentageToWidthConverter"/>
             <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         </ResourceDictionary>
     </Application.Resources>

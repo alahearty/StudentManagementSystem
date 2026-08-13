@@ -44,6 +44,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         SaveGradeCommand = new AsyncRelayCommand(async _ => await SaveGradeAsync(), _ => SelectedEnrollment is not null);
 
         LogoutCommand = new RelayCommand(_ => Logout());
+        AboutCommand = new RelayCommand(_ => ShowAbout());
 
         LoadAttendanceCommand = new AsyncRelayCommand(async _ => await LoadAttendanceAsync());
         SaveAttendanceCommand = new AsyncRelayCommand(async _ => await SaveAttendanceAsync());
@@ -55,23 +56,50 @@ public sealed class MainWindowViewModel : ViewModelBase
         LoadDashboardCommand = new AsyncRelayCommand(async _ => await LoadDashboardAsync());
         ExportStudentsCommand = new AsyncRelayCommand(async _ => await ExportStudentsAsync());
         ExportEnrollmentsCommand = new AsyncRelayCommand(async _ => await ExportEnrollmentsAsync());
+        ImportStudentsCommand = new RelayCommand(_ => ImportStudents());
+        ImportCoursesCommand = new RelayCommand(_ => ImportCourses());
+        SeedSampleDataCommand = new AsyncRelayCommand(async _ => await SeedSampleDataAsync());
+
+        LoadUsersCommand = new AsyncRelayCommand(async _ => await LoadUsersAsync());
+        AddUserCommand = new AsyncRelayCommand(async _ => await AddUserAsync());
+        DeleteUserCommand = new AsyncRelayCommand(async _ => await DeleteUserAsync(), _ => SelectedUser is not null);
+        ResetPasswordCommand = new AsyncRelayCommand(async _ => await ResetPasswordAsync(), _ => SelectedUser is not null);
 
         LoadPaymentsCommand = new AsyncRelayCommand(async _ => await LoadPaymentsAsync());
         AddPaymentCommand = new AsyncRelayCommand(async _ => await AddPaymentAsync());
         DeletePaymentCommand = new AsyncRelayCommand(async _ => await DeletePaymentAsync(), _ => SelectedPayment is not null);
+
+        LoadSemestersCommand = new AsyncRelayCommand(async _ => await LoadSemestersAsync());
+        AddSemesterCommand = new AsyncRelayCommand(async _ => await AddSemesterAsync());
+        DeleteSemesterCommand = new AsyncRelayCommand(async _ => await DeleteSemesterAsync(), _ => SelectedSemester is not null);
+
+        LoadResultsCommand = new AsyncRelayCommand(async _ => await LoadResultsAsync());
+        SaveScoresCommand = new AsyncRelayCommand(async _ => await SaveScoresAsync());
+        PublishResultsCommand = new AsyncRelayCommand(async _ => await PublishResultsAsync());
     }
 
     public bool IsAdmin { get; }
     public string CurrentUserDisplayName { get; }
     public string CurrentUserRole { get; }
     public ICommand LogoutCommand { get; }
+    public ICommand AboutCommand { get; }
 
     private void Logout()
     {
+        var result = MessageBox.Show("Sign out and return to the login screen?", "Confirm Sign Out",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+
         App.CurrentUser = null;
         var loginWindow = App.ServiceProvider.GetRequiredService<LoginWindow>();
         loginWindow.Show();
         Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w is not LoginWindow)?.Close();
+    }
+
+    private void ShowAbout()
+    {
+        var dialog = new AboutDialog { Owner = Application.Current.MainWindow };
+        dialog.ShowDialog();
     }
 
     #region Students Tab
@@ -269,7 +297,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         if (student is null) return;
         var transcriptVm = new TranscriptViewModel(_contextFactory, student);
-        var window = new TranscriptWindow(transcriptVm) { Owner = Application.Current.MainWindow };
+        var window = new TranscriptWindow(transcriptVm, _contextFactory, student.Id) { Owner = Application.Current.MainWindow };
         window.ShowDialog();
     }
 
@@ -442,6 +470,39 @@ public sealed class MainWindowViewModel : ViewModelBase
         set => SetProperty(ref _semester, value);
     }
 
+    private DateTime? _enrollmentFilterFrom;
+    public DateTime? EnrollmentFilterFrom
+    {
+        get => _enrollmentFilterFrom;
+        set { SetProperty(ref _enrollmentFilterFrom, value); _ = LoadEnrollmentsAsync(); }
+    }
+
+    private DateTime? _enrollmentFilterTo;
+    public DateTime? EnrollmentFilterTo
+    {
+        get => _enrollmentFilterTo;
+        set { SetProperty(ref _enrollmentFilterTo, value); _ = LoadEnrollmentsAsync(); }
+    }
+
+    private string _enrollmentFilterSemesterAll = "All";
+    public string EnrollmentFilterSemesterAll
+    {
+        get => _enrollmentFilterSemesterAll;
+        set { SetProperty(ref _enrollmentFilterSemesterAll, value); _ = LoadEnrollmentsAsync(); }
+    }
+
+    private string _enrollmentStatusFilter = "All";
+    public string EnrollmentStatusFilter
+    {
+        get => _enrollmentStatusFilter;
+        set { SetProperty(ref _enrollmentStatusFilter, value); _ = LoadEnrollmentsAsync(); }
+    }
+
+    public List<string> GradeStatusFilters { get; } = new() { "All", "Graded", "Ungraded", "Passed", "Failed" };
+
+    private ObservableCollection<string> _semesterList = new();
+    public ObservableCollection<string> SemesterList { get => _semesterList; set => SetProperty(ref _semesterList, value); }
+
     private EnrollmentDisplay? _selectedEnrollment;
     public EnrollmentDisplay? SelectedEnrollment
     {
@@ -466,10 +527,28 @@ public sealed class MainWindowViewModel : ViewModelBase
         try
         {
             await using var context = await _contextFactory.CreateDbContextAsync();
-            var enrollments = await context.Enrollments
+            IQueryable<Enrollment> query = context.Enrollments
                 .Include(e => e.Student)
-                .Include(e => e.Course)
+                .Include(e => e.Course);
+
+            if (EnrollmentFilterFrom.HasValue)
+                query = query.Where(e => e.EnrollmentDate >= EnrollmentFilterFrom.Value);
+            if (EnrollmentFilterTo.HasValue)
+                query = query.Where(e => e.EnrollmentDate <= EnrollmentFilterTo.Value);
+            if (EnrollmentFilterSemesterAll != "All" && !string.IsNullOrWhiteSpace(EnrollmentFilterSemesterAll))
+                query = query.Where(e => e.Semester == EnrollmentFilterSemesterAll);
+            if (EnrollmentStatusFilter == "Graded")
+                query = query.Where(e => e.Grade != null);
+            else if (EnrollmentStatusFilter == "Ungraded")
+                query = query.Where(e => e.Grade == null);
+            else if (EnrollmentStatusFilter == "Passed")
+                query = query.Where(e => e.Grade != null && e.Grade != "F");
+            else if (EnrollmentStatusFilter == "Failed")
+                query = query.Where(e => e.Grade == "F");
+
+            var enrollments = await query
                 .OrderBy(e => e.Semester).ThenBy(e => e.Student.LastName)
+                .Take(1000)
                 .Select(e => new EnrollmentDisplay
                 {
                     EnrollmentId = e.Id,
@@ -488,13 +567,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             _enrollments.Clear();
             foreach (var e in enrollments) _enrollments.Add(e);
 
-            var students = await context.Students.OrderBy(s => s.RegistrationNumber).ToListAsync();
-            _studentsForEnroll.Clear();
-            foreach (var s in students) _studentsForEnroll.Add(s);
-
-            var courses = await context.Courses.Include(c => c.PrerequisiteCourse).OrderBy(c => c.CourseCode).ToListAsync();
-            _coursesForEnroll.Clear();
-            foreach (var c in courses) _coursesForEnroll.Add(c);
+            await LoadLookupDataAsync();
         }
         catch (Exception ex)
         {
@@ -591,9 +664,9 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         if (SelectedEnrollment is null) return;
 
-        if (!string.IsNullOrWhiteSpace(SelectedEnrollment.Grade) && !ValidationHelper.IsValidGrade(SelectedEnrollment.Grade))
+        if (!string.IsNullOrWhiteSpace(SelectedEnrollment.Grade) && ResultComputationEngine.GradePointFromGrade(SelectedEnrollment.Grade) is null)
         {
-            MessageBox.Show("Invalid grade. Use A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, or F.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show($"Invalid grade. Use {string.Join(", ", ResultComputationEngine.GradeBands.Select(b => b.Grade))}.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -603,6 +676,13 @@ public sealed class MainWindowViewModel : ViewModelBase
             var enrollment = await context.Enrollments.FindAsync(SelectedEnrollment.EnrollmentId);
             if (enrollment is not null)
             {
+                if (enrollment.IsResultPublished)
+                {
+                    MessageBox.Show("This result is published and cannot be modified. Use the Results tab workflow.",
+                        "Published", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
                 enrollment.Grade = SelectedEnrollment.Grade;
                 await context.SaveChangesAsync();
                 await LoadEnrollmentsAsync();
@@ -669,9 +749,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             _attendanceRecords.Clear();
             foreach (var r in records) _attendanceRecords.Add(r);
 
-            var courses = await context.Courses.OrderBy(c => c.CourseCode).ToListAsync();
-            _coursesForEnroll.Clear();
-            foreach (var c in courses) _coursesForEnroll.Add(c);
+            await LoadLookupDataAsync();
         }
         catch (Exception ex)
         {
@@ -857,9 +935,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             _allSchedules.Clear();
             _allSchedules.AddRange(schedules);
 
-            var courses = await context.Courses.OrderBy(c => c.CourseCode).ToListAsync();
-            _scheduleCourses.Clear();
-            foreach (var c in courses) _scheduleCourses.Add(c);
+            await LoadLookupDataAsync();
 
             FilterSchedules();
         }
@@ -978,6 +1054,66 @@ public sealed class MainWindowViewModel : ViewModelBase
     public ICommand LoadDashboardCommand { get; }
     public ICommand ExportStudentsCommand { get; }
     public ICommand ExportEnrollmentsCommand { get; }
+    public ICommand ImportStudentsCommand { get; }
+    public ICommand ImportCoursesCommand { get; }
+    public ICommand SeedSampleDataCommand { get; }
+
+    private async Task SeedSampleDataAsync()
+    {
+        var result = MessageBox.Show(
+            "Seed the database with sample students, courses, enrollments, schedules and payments?\nThis only works on an empty database.",
+            "Seed Sample Data", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            var stats = DataSeeder.SeedSampleData(_contextFactory);
+            if (stats.Students == 0)
+            {
+                MessageBox.Show("Database already contains data. Nothing was seeded.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            NotificationCenter.Instance.Success($"Sample data seeded: {stats.Students} students, {stats.Courses} courses, {stats.Enrollments} enrollments.");
+            await LoadDashboardAsync();
+            await LoadStudentsAsync();
+            await LoadCoursesAsync();
+            await LoadLookupDataAsync();
+            await LoadEnrollmentsAsync();
+            await LoadAttendanceAsync();
+            await LoadSchedulesAsync();
+            await LoadPaymentsAsync();
+            await LoadResultsAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to seed sample data");
+            MessageBox.Show($"Seeding failed: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private readonly ObservableCollection<DepartmentStat> _departmentStats = new();
+    public ObservableCollection<DepartmentStat> DepartmentStats => _departmentStats;
+
+    private void ImportStudents()
+    {
+        var result = CsvImporter.OpenAndImport(CsvImporter.ImportStudentsAsync, _contextFactory, "Students");
+        if (result.Item1 > 0)
+        {
+            _ = LoadStudentsAsync();
+            NotificationCenter.Instance.Success($"Imported {result.Item1} students.");
+        }
+    }
+
+    private void ImportCourses()
+    {
+        var result = CsvImporter.OpenAndImport(CsvImporter.ImportCoursesAsync, _contextFactory, "Courses");
+        if (result.Item1 > 0)
+        {
+            _ = LoadCoursesAsync();
+            NotificationCenter.Instance.Success($"Imported {result.Item1} courses.");
+        }
+    }
 
     private async Task LoadDashboardAsync()
     {
@@ -1001,17 +1137,36 @@ public sealed class MainWindowViewModel : ViewModelBase
                 DashboardTopDeptCount = $"{topDept.Count} students";
             }
 
+            var deptStats = await context.Students
+                .GroupBy(s => s.Department)
+                .Select(g => new { Dept = g.Key, Count = g.Count() })
+                .OrderByDescending(x => x.Count)
+                .Take(8)
+                .ToListAsync();
+
+            var maxCount = deptStats.Count > 0 ? deptStats.Max(d => d.Count) : 1;
+            _departmentStats.Clear();
+            foreach (var d in deptStats)
+            {
+                _departmentStats.Add(new DepartmentStat
+                {
+                    Department = d.Dept,
+                    Count = d.Count,
+                    Percentage = (int)Math.Round(d.Count * 100.0 / maxCount)
+                });
+            }
+
             var graded = await context.Enrollments
                 .Where(e => e.Grade != null && e.Grade != "F")
                 .ToListAsync();
             if (graded.Count > 0)
             {
-                double totalGp = 0;
+                decimal totalGp = 0;
                 foreach (var g in graded)
                 {
-                    totalGp += GradeCalculator.GetGradePoint(g.Grade);
+                    totalGp += ResultComputationEngine.GradePointFromGrade(g.Grade) ?? 0;
                 }
-                DashboardAvgGpa = Math.Round(totalGp / graded.Count, 2);
+                DashboardAvgGpa = Math.Round((double)(totalGp / graded.Count), 2);
             }
             else
             {
@@ -1050,6 +1205,459 @@ public sealed class MainWindowViewModel : ViewModelBase
             Log.Error(ex, "Failed to export enrollments");
             MessageBox.Show($"Export failed: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    #endregion
+
+    #region Users Tab
+
+    private readonly ObservableCollection<User> _users = new();
+    public ObservableCollection<User> Users => _users;
+
+    private User? _selectedUser;
+    public User? SelectedUser
+    {
+        get => _selectedUser;
+        set
+        {
+            if (SetProperty(ref _selectedUser, value))
+            {
+                ((AsyncRelayCommand)DeleteUserCommand).RaiseCanExecuteChanged();
+                ((AsyncRelayCommand)ResetPasswordCommand).RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    private string _newUsername = string.Empty;
+    public string NewUsername { get => _newUsername; set => SetProperty(ref _newUsername, value); }
+
+    private string _newPassword = string.Empty;
+    public string NewPassword { get => _newPassword; set => SetProperty(ref _newPassword, value); }
+
+    private string _newDisplayName = string.Empty;
+    public string NewDisplayName { get => _newDisplayName; set => SetProperty(ref _newDisplayName, value); }
+
+    private string _newRole = "Teacher";
+    public string NewRole { get => _newRole; set => SetProperty(ref _newRole, value); }
+
+    private bool _newIsActive = true;
+    public bool NewIsActive { get => _newIsActive; set => SetProperty(ref _newIsActive, value); }
+
+    public List<string> Roles { get; } = new() { "Admin", "Teacher" };
+
+    public ICommand LoadUsersCommand { get; }
+    public ICommand AddUserCommand { get; }
+    public ICommand DeleteUserCommand { get; }
+    public ICommand ResetPasswordCommand { get; }
+
+    private async Task LoadUsersAsync()
+    {
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var users = await context.Users.OrderBy(u => u.Username).ToListAsync();
+            _users.Clear();
+            foreach (var u in users) _users.Add(u);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to load users");
+            MessageBox.Show($"Failed to load users: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task AddUserAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewUsername) || string.IsNullOrWhiteSpace(NewPassword))
+        {
+            MessageBox.Show("Username and password are required.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var exists = await context.Users.AnyAsync(u => u.Username == NewUsername.Trim());
+            if (exists)
+            {
+                MessageBox.Show("Username already exists.", "Duplicate", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            context.Users.Add(new User
+            {
+                Username = NewUsername.Trim(),
+                PasswordHash = Services.AuthService.HashPassword(NewPassword),
+                Role = NewRole,
+                DisplayName = string.IsNullOrWhiteSpace(NewDisplayName) ? NewUsername.Trim() : NewDisplayName.Trim(),
+                IsActive = NewIsActive,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await context.SaveChangesAsync();
+            await LoadUsersAsync();
+            NewUsername = string.Empty;
+            NewPassword = string.Empty;
+            NewDisplayName = string.Empty;
+            NewRole = "Teacher";
+            NewIsActive = true;
+            NotificationCenter.Instance.Success($"User '{NewUsername}' created.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to create user");
+            MessageBox.Show($"Failed to create user: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task DeleteUserAsync()
+    {
+        if (SelectedUser is null) return;
+        if (SelectedUser.Username == App.CurrentUser?.Username)
+        {
+            MessageBox.Show("You cannot delete your own account.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var result = MessageBox.Show($"Delete user '{SelectedUser.Username}'?", "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var user = await context.Users.FindAsync(SelectedUser.Id);
+            if (user is not null)
+            {
+                context.Users.Remove(user);
+                await context.SaveChangesAsync();
+            }
+            await LoadUsersAsync();
+            SelectedUser = null;
+            NotificationCenter.Instance.Warn($"User deleted.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to delete user {UserId}", SelectedUser?.Id);
+            MessageBox.Show($"Failed to delete user: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (SelectedUser is null) return;
+
+        var dialog = new Views.PasswordResetDialog { Owner = Application.Current.MainWindow };
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.NewPassword))
+            return;
+
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var user = await context.Users.FindAsync(SelectedUser.Id);
+            if (user is not null)
+            {
+                user.PasswordHash = Services.AuthService.HashPassword(dialog.NewPassword);
+                await context.SaveChangesAsync();
+                NotificationCenter.Instance.Success($"Password reset for '{user.Username}'.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to reset password for {UserId}", SelectedUser?.Id);
+            MessageBox.Show($"Failed to reset password: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    #endregion
+
+    #region Semesters Tab
+
+    private readonly ObservableCollection<Semester> _semesters = new();
+    public ObservableCollection<Semester> Semesters => _semesters;
+
+    private Semester? _selectedSemester;
+    public Semester? SelectedSemester
+    {
+        get => _selectedSemester;
+        set
+        {
+            if (SetProperty(ref _selectedSemester, value))
+                ((AsyncRelayCommand)DeleteSemesterCommand).RaiseCanExecuteChanged();
+        }
+    }
+
+    private string _semesterName = string.Empty;
+    public string SemesterName { get => _semesterName; set => SetProperty(ref _semesterName, value); }
+
+    private DateTime _semesterStart = DateTime.Today;
+    public DateTime SemesterStart { get => _semesterStart; set => SetProperty(ref _semesterStart, value); }
+
+    private DateTime _semesterEnd = DateTime.Today.AddMonths(4);
+    public DateTime SemesterEnd { get => _semesterEnd; set => SetProperty(ref _semesterEnd, value); }
+
+    private bool _semesterIsActive = true;
+    public bool SemesterIsActive { get => _semesterIsActive; set => SetProperty(ref _semesterIsActive, value); }
+
+    public ICommand LoadSemestersCommand { get; }
+    public ICommand AddSemesterCommand { get; }
+    public ICommand DeleteSemesterCommand { get; }
+
+    private async Task LoadSemestersAsync()
+    {
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var semesters = await context.Semesters.OrderByDescending(s => s.StartDate).ToListAsync();
+            _semesters.Clear();
+            foreach (var s in semesters) _semesters.Add(s);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to load semesters");
+            MessageBox.Show($"Failed to load semesters: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task AddSemesterAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SemesterName))
+        {
+            MessageBox.Show("Semester name is required.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (SemesterEnd <= SemesterStart)
+        {
+            MessageBox.Show("End date must be after start date.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var exists = await context.Semesters.AnyAsync(s => s.Name == SemesterName.Trim());
+            if (exists)
+            {
+                MessageBox.Show("Semester already exists.", "Duplicate", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            context.Semesters.Add(new Semester
+            {
+                Name = SemesterName.Trim(),
+                StartDate = SemesterStart,
+                EndDate = SemesterEnd,
+                IsActive = SemesterIsActive
+            });
+
+            await context.SaveChangesAsync();
+            await LoadSemestersAsync();
+            SemesterName = string.Empty;
+            NotificationCenter.Instance.Success("Semester created.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to create semester");
+            MessageBox.Show($"Failed to create semester: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task DeleteSemesterAsync()
+    {
+        if (SelectedSemester is null) return;
+        var result = MessageBox.Show($"Delete semester '{SelectedSemester.Name}'?", "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var s = await context.Semesters.FindAsync(SelectedSemester.Id);
+            if (s is not null) { context.Semesters.Remove(s); await context.SaveChangesAsync(); }
+            await LoadSemestersAsync();
+            SelectedSemester = null;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to delete semester");
+            MessageBox.Show($"Failed to delete semester: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    #endregion
+
+    #region Results Tab
+
+    private readonly ObservableCollection<ResultEntry> _resultEntries = new();
+    public ObservableCollection<ResultEntry> ResultEntries => _resultEntries;
+
+    private Course? _selectedCourseForResults;
+    public Course? SelectedCourseForResults
+    {
+        get => _selectedCourseForResults;
+        set { SetProperty(ref _selectedCourseForResults, value); _ = LoadResultEntriesAsync(); }
+    }
+
+    private string _resultSemester = string.Empty;
+    public string ResultSemester
+    {
+        get => _resultSemester;
+        set { SetProperty(ref _resultSemester, value); _ = LoadResultEntriesAsync(); }
+    }
+
+    private string _resultSummary = string.Empty;
+    public string ResultSummary
+    {
+        get => _resultSummary;
+        set => SetProperty(ref _resultSummary, value);
+    }
+
+    public ICommand LoadResultsCommand { get; }
+    public ICommand SaveScoresCommand { get; }
+    public ICommand PublishResultsCommand { get; }
+
+    private async Task LoadResultsAsync()
+    {
+        try
+        {
+            await LoadLookupDataAsync();
+            await LoadResultEntriesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to load results");
+            MessageBox.Show($"Failed to load results: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task LoadResultEntriesAsync()
+    {
+        _resultEntries.Clear();
+        if (SelectedCourseForResults is null || string.IsNullOrWhiteSpace(ResultSemester)) return;
+
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var enrollments = await context.Enrollments
+                .Include(e => e.Student)
+                .Where(e => e.CourseId == SelectedCourseForResults.Id && e.Semester == ResultSemester)
+                .OrderBy(e => e.Student.LastName)
+                .ToListAsync();
+
+            foreach (var e in enrollments)
+            {
+                _resultEntries.Add(new ResultEntry
+                {
+                    EnrollmentId = e.Id,
+                    StudentId = e.StudentId,
+                    StudentName = e.Student.FullName,
+                    RegistrationNumber = e.Student.RegistrationNumber,
+                    CaScore = e.CaScore,
+                    ExamScore = e.ExamScore,
+                    IsPublished = e.IsResultPublished,
+                    ResultPublishedAt = e.ResultPublishedAt
+                });
+            }
+
+            UpdateResultSummary();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to load result entries");
+        }
+    }
+
+    private async Task SaveScoresAsync()
+    {
+        if (_resultEntries.Count == 0) return;
+
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+
+            foreach (var entry in _resultEntries)
+            {
+                if (!ResultComputationEngine.ValidateScores(entry.CaScore, entry.ExamScore, out var error))
+                {
+                    MessageBox.Show($"{entry.StudentName}: {error}", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                var enrollment = await context.Enrollments.FindAsync(entry.EnrollmentId);
+                if (enrollment is null) continue;
+
+                if (enrollment.IsResultPublished)
+                {
+                    MessageBox.Show($"Results for {enrollment.Student.FullName} are already published and cannot be modified.",
+                        "Published", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    continue;
+                }
+
+                enrollment.CaScore = entry.CaScore;
+                enrollment.ExamScore = entry.ExamScore;
+                enrollment.Grade = ResultComputationEngine.ComputeGrade(entry.CaScore, entry.ExamScore);
+            }
+
+            await context.SaveChangesAsync();
+            await LoadResultEntriesAsync();
+            NotificationCenter.Instance.Success("Scores saved and grades computed.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to save scores");
+            MessageBox.Show($"Failed to save scores: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task PublishResultsAsync()
+    {
+        if (_resultEntries.Count == 0) return;
+        if (_resultEntries.Any(r => !r.CaScore.HasValue || !r.ExamScore.HasValue))
+        {
+            MessageBox.Show("All students must have scores before publishing results.",
+                "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var result = MessageBox.Show(
+            $"Publish results for {_resultEntries.Count} students in {SelectedCourseForResults?.CourseName} ({ResultSemester})?",
+            "Publish Results", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var now = DateTime.UtcNow;
+
+            foreach (var entry in _resultEntries)
+            {
+                var enrollment = await context.Enrollments.FindAsync(entry.EnrollmentId);
+                if (enrollment is null || enrollment.IsResultPublished) continue;
+
+                enrollment.IsResultPublished = true;
+                enrollment.ResultPublishedAt = now;
+                entry.IsPublished = true;
+                entry.ResultPublishedAt = now;
+            }
+
+            await context.SaveChangesAsync();
+            UpdateResultSummary();
+            NotificationCenter.Instance.Success($"Results published for {SelectedCourseForResults?.CourseName}.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to publish results");
+            MessageBox.Show($"Failed to publish results: {Unwrap(ex)}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void UpdateResultSummary()
+    {
+        var graded = _resultEntries.Where(r => r.Grade is not null).ToList();
+        var published = _resultEntries.Count(r => r.IsPublished);
+        var passes = graded.Count(r => ResultComputationEngine.IsPassingGrade(r.Grade));
+        var fails = graded.Count - passes;
+        var avgTotal = graded.Where(r => r.TotalScore.HasValue).Select(r => r.TotalScore!.Value).DefaultIfEmpty(0).Average();
+
+        ResultSummary = $"Enrolled: {_resultEntries.Count}  |  Graded: {graded.Count}  |  Passed: {passes}  |  Failed: {fails}  |  Published: {published}  |  Avg Total: {avgTotal:F1}/100";
     }
 
     #endregion
@@ -1138,8 +1746,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
             TotalPayments = await context.Payments.Where(p => p.Status == "Completed").SumAsync(p => p.Amount);
 
-            var students = await context.Students.OrderBy(s => s.RegistrationNumber).ToListAsync();
-            PaymentStudents = new ObservableCollection<Student>(students);
+            await LoadLookupDataAsync();
         }
         catch (Exception ex)
         {
@@ -1211,6 +1818,45 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
+    private async Task LoadLookupDataAsync()
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var students = await context.Students.OrderBy(s => s.RegistrationNumber).ToListAsync();
+        _studentsForEnroll.Clear();
+        foreach (var s in students) _studentsForEnroll.Add(s);
+        PaymentStudents = new ObservableCollection<Student>(students);
+
+        var courses = await context.Courses.Include(c => c.PrerequisiteCourse).OrderBy(c => c.CourseCode).ToListAsync();
+        _coursesForEnroll.Clear();
+        foreach (var c in courses) _coursesForEnroll.Add(c);
+        _scheduleCourses.Clear();
+        foreach (var c in courses) _scheduleCourses.Add(c);
+
+        var semesters = await context.Semesters.Where(s => s.IsActive).OrderByDescending(s => s.StartDate).Select(s => s.Name).ToListAsync();
+        SemesterList = new ObservableCollection<string>(semesters);
+
+        if (SemesterList.Count > 0)
+        {
+            if (!SemesterList.Contains(Semester))
+                Semester = SemesterList[0];
+            if (string.IsNullOrWhiteSpace(ResultSemester) || !SemesterList.Contains(ResultSemester))
+                ResultSemester = SemesterList[0];
+        }
+
+        RemapSelections();
+    }
+
+    private void RemapSelections()
+    {
+        SelectedCourseForEnroll = _coursesForEnroll.FirstOrDefault(c => c.Id == SelectedCourseForEnroll?.Id);
+        SelectedCourseForAttendance = _coursesForEnroll.FirstOrDefault(c => c.Id == SelectedCourseForAttendance?.Id);
+        SelectedCourseForResults = _coursesForEnroll.FirstOrDefault(c => c.Id == SelectedCourseForResults?.Id);
+        SelectedScheduleCourse = _scheduleCourses.FirstOrDefault(c => c.Id == SelectedScheduleCourse?.Id);
+        SelectedStudentForEnroll = _studentsForEnroll.FirstOrDefault(s => s.Id == SelectedStudentForEnroll?.Id);
+        SelectedPaymentStudent = PaymentStudents.FirstOrDefault(s => s.Id == SelectedPaymentStudent?.Id);
+    }
+
     #endregion
 
     private static bool IsDuplicateKey(DbUpdateException ex)
@@ -1259,4 +1905,62 @@ public sealed class AttendanceEntry
     public string RegistrationNumber { get; set; } = string.Empty;
     public string Status { get; set; } = "Present";
     public string Remarks { get; set; } = string.Empty;
+}
+
+public sealed class ResultEntry : ViewModelBase
+{
+    public int EnrollmentId { get; set; }
+    public int StudentId { get; set; }
+    public string StudentName { get; set; } = string.Empty;
+    public string RegistrationNumber { get; set; } = string.Empty;
+
+    private decimal? _caScore;
+    public decimal? CaScore
+    {
+        get => _caScore;
+        set
+        {
+            if (SetProperty(ref _caScore, value))
+            {
+                OnPropertyChanged(nameof(TotalScore));
+                OnPropertyChanged(nameof(Grade));
+                OnPropertyChanged(nameof(GradePoint));
+            }
+        }
+    }
+
+    private decimal? _examScore;
+    public decimal? ExamScore
+    {
+        get => _examScore;
+        set
+        {
+            if (SetProperty(ref _examScore, value))
+            {
+                OnPropertyChanged(nameof(TotalScore));
+                OnPropertyChanged(nameof(Grade));
+                OnPropertyChanged(nameof(GradePoint));
+            }
+        }
+    }
+
+    public decimal? TotalScore => Services.ResultComputationEngine.ComputeTotalScore(CaScore, ExamScore);
+    public string? Grade => Services.ResultComputationEngine.ComputeGrade(CaScore, ExamScore);
+    public decimal? GradePoint => Services.ResultComputationEngine.GradePointFromGrade(Grade);
+
+    private bool _isPublished;
+    public bool IsPublished
+    {
+        get => _isPublished;
+        set => SetProperty(ref _isPublished, value);
+    }
+
+    public DateTime? ResultPublishedAt { get; set; }
+}
+
+public sealed class DepartmentStat
+{
+    public string Department { get; set; } = string.Empty;
+    public int Count { get; set; }
+    public int Percentage { get; set; }
 }

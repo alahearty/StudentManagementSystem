@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         xmlns:collections="clr-namespace:System.Collections;assembly=mscorlib"
+        xmlns:converters="clr-namespace:StudentManagementSystem.Converters"
         Title="Student Management System" Height="700" Width="1140"
         MinHeight="520" MinWidth="880"
         WindowStartupLocation="CenterScreen"
@@ -12,6 +13,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header Bar -->
@@ -131,6 +133,12 @@
                             </Border>
                         </StackPanel>
                     </Border>
+                    <Button Content="About"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Command="{Binding AboutCommand}"
+                            FontSize="12"
+                            Padding="10,6"
+                            Margin="0,0,8,0"/>
                     <Button Content="Logout"
                             Style="{StaticResource SecondaryButtonStyle}"
                             Command="{Binding LogoutCommand}"
@@ -428,8 +436,10 @@
                                     <StackPanel Width="140" Margin="12,0,0,0">
                                         <TextBlock Text="Semester"
                                                    Style="{StaticResource FieldLabelStyle}"/>
-                                        <TextBox Text="{Binding Semester, UpdateSourceTrigger=PropertyChanged}"
-                                                 Style="{StaticResource ModernTextBoxStyle}"/>
+                                        <ComboBox ItemsSource="{Binding SemesterList}"
+                                                  Text="{Binding Semester}"
+                                                  IsEditable="True"
+                                                  Style="{StaticResource ModernComboBoxStyle}"/>
                                     </StackPanel>
                                 </StackPanel>
                                 <Button Content="Enroll Student"
@@ -463,6 +473,24 @@
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         Command="{Binding SaveGradeCommand}"
                                         Margin="8,0,0,0"/>
+                                <StackPanel Orientation="Horizontal" Margin="16,0,0,0">
+                                    <TextBlock Text="From:" VerticalAlignment="Center"
+                                               FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                               Margin="0,0,4,0"/>
+                                    <DatePicker SelectedDate="{Binding EnrollmentFilterFrom}"
+                                                Style="{StaticResource ModernDatePickerStyle}"
+                                                Width="130" Margin="0,0,8,0"/>
+                                    <TextBlock Text="To:" VerticalAlignment="Center"
+                                               FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                               Margin="0,0,4,0"/>
+                                    <DatePicker SelectedDate="{Binding EnrollmentFilterTo}"
+                                                Style="{StaticResource ModernDatePickerStyle}"
+                                                Width="130" Margin="0,0,8,0"/>
+                                    <ComboBox ItemsSource="{Binding GradeStatusFilters}"
+                                              SelectedItem="{Binding EnrollmentStatusFilter}"
+                                              Style="{StaticResource ModernComboBoxStyle}"
+                                              Width="90"/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
@@ -550,6 +578,11 @@
                                         Command="{Binding SaveAttendanceCommand}"
                                         VerticalAlignment="Bottom"
                                         Margin="16,0,0,0"/>
+                                <Button Content="Export PDF"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Click="ExportAttendancePdf_Click"
+                                        VerticalAlignment="Bottom"
+                                        Margin="8,0,0,0"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -804,23 +837,90 @@
                             CornerRadius="8" Padding="20" VerticalAlignment="Top"
                             Margin="0,12,0,0">
                         <StackPanel>
-                            <TextBlock Text="Data Export"
+                            <TextBlock Text="Data Export &amp; Import"
                                        FontSize="14" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextPrimaryBrush}"
                                        Margin="0,0,0,10"/>
-                            <TextBlock Text="Export data to CSV files for use in Excel or other tools."
+                            <TextBlock Text="Export data to CSV/PDF files or import students/courses from CSV."
                                        FontSize="12" Foreground="{StaticResource TextMutedBrush}"
                                        Margin="0,0,0,14"
                                        TextWrapping="Wrap"/>
                             <StackPanel Orientation="Horizontal">
-                                <Button Content="Export Students"
+                                <Button Content="Export Students (CSV)"
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         Command="{Binding ExportStudentsCommand}"
                                         Margin="0,0,10,0"/>
-                                <Button Content="Export Enrollments"
+                                <Button Content="Export Enrollments (CSV)"
                                         Style="{StaticResource SecondaryButtonStyle}"
-                                        Command="{Binding ExportEnrollmentsCommand}"/>
+                                        Command="{Binding ExportEnrollmentsCommand}"
+                                        Margin="0,0,10,0"/>
+                                <Button Content="Export Payments (PDF)"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Click="ExportPaymentsPdf_Click"
+                                        Margin="0,0,10,0"/>
+                                <Button Content="Import Students"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Command="{Binding ImportStudentsCommand}"
+                                        Margin="0,0,10,0"/>
+                                <Button Content="Import Courses"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Command="{Binding ImportCoursesCommand}"
+                                        Margin="0,0,10,0"
+                                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                <Button Content="Seed Sample Data"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Command="{Binding SeedSampleDataCommand}"
+                                        Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVisibilityConverter}}"/>
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Department Distribution -->
+                    <Border Grid.Row="1"
+                            Background="{StaticResource SurfaceBrush}"
+                            CornerRadius="8" Padding="20"
+                            VerticalAlignment="Top"
+                            Margin="0,12,0,0"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="Students by Department"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Margin="0,0,0,12"/>
+                            <ItemsControl ItemsSource="{Binding DepartmentStats}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="130"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="50"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Department}"
+                                                       FontSize="12"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Border Grid.Column="1" Height="14"
+                                                    Background="{StaticResource BackgroundBrush}"
+                                                    CornerRadius="7" Margin="8,0"
+                                                    VerticalAlignment="Center">
+                                                <Grid>
+                                                    <Border Background="{StaticResource PrimaryBrush}"
+                                                            CornerRadius="7"
+                                                            HorizontalAlignment="Left"
+                                                            Width="{Binding Percentage, Converter={StaticResource PercentageToWidthConverter}}"/>
+                                                </Grid>
+                                            </Border>
+                                            <TextBlock Grid.Column="2" Text="{Binding Count}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       HorizontalAlignment="Right"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -934,6 +1034,282 @@
                     </DataGrid>
                 </Grid>
             </TabItem>
+            <!-- ==================== USERS TAB ==================== -->
+            <TabItem Style="{StaticResource ModernTabItemStyle}"
+                     Loaded="UsersTab_Loaded"
+                     Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Users"/>
+                        <Border Background="{StaticResource PrimaryLightBrush}"
+                                CornerRadius="10" Padding="6,2"
+                                Margin="8,0,0,0" MinWidth="24">
+                            <TextBlock Text="{Binding Users.Count, FallbackValue=0, Mode=OneWay}"
+                                       FontSize="11" FontWeight="Bold"
+                                       Foreground="{StaticResource PrimaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
+                </TabItem.Header>
+                <Grid Margin="16,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Background="{StaticResource BackgroundBrush}"
+                            CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                        <WrapPanel>
+                            <StackPanel Width="140" Margin="0,0,8,0">
+                                <TextBlock Text="Username" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBox Text="{Binding NewUsername, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource ModernTextBoxStyle}"/>
+                            </StackPanel>
+                            <StackPanel Width="140" Margin="0,0,8,0">
+                                <TextBlock Text="Password" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBox Text="{Binding NewPassword, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource ModernTextBoxStyle}"/>
+                            </StackPanel>
+                            <StackPanel Width="140" Margin="0,0,8,0">
+                                <TextBlock Text="Display Name" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBox Text="{Binding NewDisplayName, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource ModernTextBoxStyle}"/>
+                            </StackPanel>
+                            <StackPanel Width="100" Margin="0,0,8,0">
+                                <TextBlock Text="Role" Style="{StaticResource FieldLabelStyle}"/>
+                                <ComboBox ItemsSource="{Binding Roles}"
+                                          SelectedItem="{Binding NewRole}"
+                                          Style="{StaticResource ModernComboBoxStyle}"/>
+                            </StackPanel>
+                            <StackPanel Width="70" Margin="0,0,8,0" VerticalAlignment="Bottom">
+                                <CheckBox IsChecked="{Binding NewIsActive}" Content="Active"
+                                          VerticalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,1">
+                                <Button Content="Add User"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Command="{Binding AddUserCommand}"/>
+                                <Button Content="Reset PW"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Command="{Binding ResetPasswordCommand}"
+                                        Margin="8,0,0,0"/>
+                                <Button Content="Delete"
+                                        Style="{StaticResource DangerButtonStyle}"
+                                        Command="{Binding DeleteUserCommand}"
+                                        Margin="8,0,0,0"/>
+                            </StackPanel>
+                        </WrapPanel>
+                    </Border>
+
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Users}"
+                              SelectedItem="{Binding SelectedUser}"
+                              Style="{StaticResource ModernDataGridStyle}"
+                              AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserAddRows="False"
+                              AlternatingRowBackground="#F9FAFB" AlternationCount="2">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Username" Binding="{Binding Username}" Width="120"/>
+                            <DataGridTextColumn Header="Display Name" Binding="{Binding DisplayName}" Width="160"/>
+                            <DataGridTextColumn Header="Role" Binding="{Binding Role}" Width="80"/>
+                            <DataGridTextColumn Header="Active" Binding="{Binding IsActive}" Width="70"/>
+                            <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt, StringFormat={}{0:yyyy-MM-dd}}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+            <!-- ==================== SEMESTERS TAB ==================== -->
+            <TabItem Style="{StaticResource ModernTabItemStyle}"
+                     Loaded="SemestersTab_Loaded"
+                     Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Semesters"/>
+                        <Border Background="{StaticResource PrimaryLightBrush}"
+                                CornerRadius="10" Padding="6,2"
+                                Margin="8,0,0,0" MinWidth="24">
+                            <TextBlock Text="{Binding Semesters.Count, FallbackValue=0, Mode=OneWay}"
+                                       FontSize="11" FontWeight="Bold"
+                                       Foreground="{StaticResource PrimaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
+                </TabItem.Header>
+                <Grid Margin="16,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Background="{StaticResource BackgroundBrush}"
+                            CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                        <WrapPanel>
+                            <StackPanel Width="180" Margin="0,0,10,0">
+                                <TextBlock Text="Semester Name" Style="{StaticResource FieldLabelStyle}"/>
+                                <TextBox Text="{Binding SemesterName, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource ModernTextBoxStyle}"/>
+                            </StackPanel>
+                            <StackPanel Width="160" Margin="0,0,10,0">
+                                <TextBlock Text="Start Date" Style="{StaticResource FieldLabelStyle}"/>
+                                <DatePicker SelectedDate="{Binding SemesterStart}"
+                                            Style="{StaticResource ModernDatePickerStyle}"/>
+                            </StackPanel>
+                            <StackPanel Width="160" Margin="0,0,10,0">
+                                <TextBlock Text="End Date" Style="{StaticResource FieldLabelStyle}"/>
+                                <DatePicker SelectedDate="{Binding SemesterEnd}"
+                                            Style="{StaticResource ModernDatePickerStyle}"/>
+                            </StackPanel>
+                            <StackPanel Width="70" Margin="0,0,10,0" VerticalAlignment="Bottom">
+                                <CheckBox IsChecked="{Binding SemesterIsActive}" Content="Active"
+                                          VerticalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,1">
+                                <Button Content="Add Semester"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Command="{Binding AddSemesterCommand}"/>
+                                <Button Content="Delete"
+                                        Style="{StaticResource DangerButtonStyle}"
+                                        Command="{Binding DeleteSemesterCommand}"
+                                        Margin="8,0,0,0"/>
+                            </StackPanel>
+                        </WrapPanel>
+                    </Border>
+
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Semesters}"
+                              SelectedItem="{Binding SelectedSemester}"
+                              Style="{StaticResource ModernDataGridStyle}"
+                              AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserAddRows="False"
+                              AlternatingRowBackground="#F9FAFB" AlternationCount="2">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200"/>
+                            <DataGridTextColumn Header="Start" Binding="{Binding StartDate, StringFormat={}{0:yyyy-MM-dd}}" Width="120"/>
+                            <DataGridTextColumn Header="End" Binding="{Binding EndDate, StringFormat={}{0:yyyy-MM-dd}}" Width="120"/>
+                            <DataGridTextColumn Header="Active" Binding="{Binding IsActive}" Width="70"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+            <!-- ==================== RESULTS TAB ==================== -->
+            <TabItem Style="{StaticResource ModernTabItemStyle}"
+                     Loaded="ResultsTab_Loaded">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Results"/>
+                        <Border Background="{StaticResource PrimaryLightBrush}"
+                                CornerRadius="10" Padding="6,2"
+                                Margin="8,0,0,0" MinWidth="24">
+                            <TextBlock Text="{Binding ResultEntries.Count, FallbackValue=0, Mode=OneWay}"
+                                       FontSize="11" FontWeight="Bold"
+                                       Foreground="{StaticResource PrimaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
+                </TabItem.Header>
+                <Grid Margin="16,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Result Form -->
+                    <Border Background="{StaticResource BackgroundBrush}"
+                            CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                        <StackPanel Orientation="Horizontal">
+                            <StackPanel Width="240">
+                                <TextBlock Text="Course" Style="{StaticResource FieldLabelStyle}"/>
+                                <ComboBox ItemsSource="{Binding CoursesForEnroll}"
+                                          SelectedItem="{Binding SelectedCourseForResults}"
+                                          DisplayMemberPath="CourseName"
+                                          Style="{StaticResource ModernComboBoxStyle}"/>
+                            </StackPanel>
+                            <StackPanel Width="160" Margin="12,0,0,0">
+                                <TextBlock Text="Semester" Style="{StaticResource FieldLabelStyle}"/>
+                                <ComboBox ItemsSource="{Binding SemesterList}"
+                                          Text="{Binding ResultSemester}"
+                                          IsEditable="True"
+                                          Style="{StaticResource ModernComboBoxStyle}"/>
+                            </StackPanel>
+                            <StackPanel VerticalAlignment="Bottom" Orientation="Horizontal" Margin="16,0,0,1">
+                                <Button Content="Save Scores"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Command="{Binding SaveScoresCommand}"
+                                        Margin="0,0,10,0"/>
+                                <Button Content="Publish Results"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Command="{Binding PublishResultsCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Summary -->
+                    <Border Grid.Row="1"
+                            Background="{StaticResource SurfaceBrush}"
+                            CornerRadius="8" Padding="12"
+                            Margin="0,0,0,8"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <TextBlock Text="{Binding ResultSummary, FallbackValue=Select a course and semester to load results}"
+                                   FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Border>
+
+                    <!-- Score Entry Grid -->
+                    <DataGrid Grid.Row="2" ItemsSource="{Binding ResultEntries}"
+                              Style="{StaticResource ModernDataGridStyle}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              AlternatingRowBackground="#F9FAFB" AlternationCount="2">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Student" Binding="{Binding StudentName}" Width="150" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Reg. No." Binding="{Binding RegistrationNumber}" Width="90" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="CA (0-40)" Binding="{Binding CaScore}" Width="80"/>
+                            <DataGridTextColumn Header="Exam (0-60)" Binding="{Binding ExamScore}" Width="90"/>
+                            <DataGridTextColumn Header="Total" Binding="{Binding TotalScore}" Width="70" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Grade" Binding="{Binding Grade}" Width="60" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="FontWeight" Value="Bold"/>
+                                        <Setter Property="HorizontalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="GP" Binding="{Binding GradePoint}" Width="50" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Status" Width="*" IsReadOnly="True">
+                                <DataGridTextColumn.Binding>
+                                    <Binding Path="IsPublished">
+                                        <Binding.Converter>
+                                            <converters:BoolToStatusConverter/>
+                                        </Binding.Converter>
+                                    </Binding>
+                                </DataGridTextColumn.Binding>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
         </TabControl>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="2"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="16,6">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}">
+                    <Run Text="Signed in as: "/>
+                    <Run Text="{Binding CurrentUserDisplayName, Mode=OneWay}" FontWeight="SemiBold"/>
+                    <Run Text="  ("/>
+                    <Run Text="{Binding CurrentUserRole, Mode=OneWay}" FontWeight="SemiBold"/>
+                    <Run Text=")"/>
+                </TextBlock>
+                <TextBlock HorizontalAlignment="Right"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}">
+                    <Run Text="Student Management System v1.0.0"/>
+                </TextBlock>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>

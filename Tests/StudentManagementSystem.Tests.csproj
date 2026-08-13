@@ -17,8 +17,8 @@
 
   <ItemGroup>
     <Compile Include="..\Services\AuthService.cs" Link="Services\AuthService.cs" />
-    <Compile Include="..\Services\GradeCalculator.cs" Link="Services\GradeCalculator.cs" />
     <Compile Include="..\Services\ValidationHelper.cs" Link="Services\ValidationHelper.cs" />
+    <Compile Include="..\Services\ResultComputationEngine.cs" Link="Services\ResultComputationEngine.cs" />
   </ItemGroup>
 
   <ItemGroup>

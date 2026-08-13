@@ -43,8 +43,7 @@ public static partial class ValidationHelper
     public static bool IsValidGrade(string? grade)
     {
         if (string.IsNullOrWhiteSpace(grade)) return true;
-        var validGrades = new[] { "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F" };
-        return validGrades.Contains(grade.Trim().ToUpper());
+        return ResultComputationEngine.GradePointFromGrade(grade) is not null;
     }
 
     public static bool IsValidCredits(int credits, int min = 1, int max = 12)

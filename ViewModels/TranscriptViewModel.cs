@@ -38,7 +38,6 @@ public sealed class TranscriptViewModel : ViewModelBase
         get => _cumulativeGpa;
         set => SetProperty(ref _cumulativeGpa, value);
     }
-
     private int _totalCredits;
     public int TotalCredits
     {
@@ -79,7 +78,9 @@ public sealed class TranscriptViewModel : ViewModelBase
                 e.Course.Credits,
                 e.Grade,
                 e.Semester,
-                e.EnrollmentDate
+                e.EnrollmentDate,
+                e.CaScore,
+                e.ExamScore
             })
             .ToListAsync();
 
@@ -93,13 +94,17 @@ public sealed class TranscriptViewModel : ViewModelBase
                 Credits = e.Credits,
                 Grade = e.Grade ?? "-",
                 Semester = e.Semester,
-                EnrollmentDate = e.EnrollmentDate
+                EnrollmentDate = e.EnrollmentDate,
+                CaScore = e.CaScore,
+                ExamScore = e.ExamScore,
+                TotalScore = ResultComputationEngine.ComputeTotalScore(e.CaScore, e.ExamScore),
+                GradePoint = ResultComputationEngine.GradePointFromGrade(e.Grade)
             });
         }
 
         var gpaInput = enrollments.Select(e => (e.Grade, e.Credits, e.Semester)).ToList();
-        var (_, cumulative) = GradeCalculator.CalculateGpa(gpaInput);
-        CumulativeGpa = cumulative;
+        var cumulative = ResultComputationEngine.ComputeGpa(gpaInput);
+        CumulativeGpa = (double)cumulative;
 
         var graded = enrollments.Where(e => !string.IsNullOrWhiteSpace(e.Grade)).ToList();
         TotalCourses = graded.Count;
@@ -107,28 +112,23 @@ public sealed class TranscriptViewModel : ViewModelBase
         Honors = GetHonors(cumulative);
 
         SemesterSummaries.Clear();
-        foreach (var s in GradeCalculator.GetSemesterBreakdown(gpaInput))
+        foreach (var s in ResultComputationEngine.GetSemesterBreakdown(gpaInput))
         {
             SemesterSummaries.Add(new SemesterSummary
             {
                 Semester = s.Semester,
-                Gpa = s.Gpa,
+                Gpa = (double)s.Gpa,
                 Courses = s.Courses,
-                Credits = s.Credits
+                Credits = s.Credits,
+                Passes = s.Passes,
+                Fails = s.Fails
             });
         }
     }
 
-    private static string GetHonors(double gpa)
+    private static string GetHonors(decimal gpa)
     {
-        return gpa switch
-        {
-            >= 3.8 => "Summa Cum Laude",
-            >= 3.6 => "Magna Cum Laude",
-            >= 3.4 => "Cum Laude",
-            >= 3.0 => "Dean's List",
-            _ => "-"
-        };
+        return ResultComputationEngine.GetClassOfDegree(gpa);
     }
 }
 
@@ -140,6 +140,10 @@ public sealed class TranscriptEntry
     public string Grade { get; set; } = "-";
     public string Semester { get; set; } = string.Empty;
     public DateTime EnrollmentDate { get; set; }
+    public decimal? CaScore { get; set; }
+    public decimal? ExamScore { get; set; }
+    public decimal? TotalScore { get; set; }
+    public decimal? GradePoint { get; set; }
 }
 
 public sealed class SemesterSummary
@@ -148,4 +152,6 @@ public sealed class SemesterSummary
     public double Gpa { get; set; }
     public int Courses { get; set; }
     public int Credits { get; set; }
+    public int Passes { get; set; }
+    public int Fails { get; set; }
 }

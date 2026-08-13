@@ -14,6 +14,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<Attendance> Attendances => Set<Attendance>();
     public DbSet<Schedule> Schedules => Set<Schedule>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<Semester> Semesters => Set<Semester>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -59,6 +60,8 @@ public sealed class AppDbContext : DbContext
             entity.HasIndex(e => new { e.StudentId, e.CourseId, e.Semester }).IsUnique();
             entity.Property(e => e.Grade).HasMaxLength(5);
             entity.Property(e => e.Semester).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.CaScore).HasColumnType("decimal(5,2)");
+            entity.Property(e => e.ExamScore).HasColumnType("decimal(5,2)");
         });
 
         modelBuilder.Entity<User>(entity =>
@@ -111,6 +114,12 @@ public sealed class AppDbContext : DbContext
             entity.Property(p => p.PaymentMethod).HasMaxLength(30).IsRequired();
             entity.Property(p => p.Status).HasMaxLength(20).IsRequired();
             entity.Property(p => p.Semester).HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<Semester>(entity =>
+        {
+            entity.HasIndex(s => s.Name).IsUnique();
+            entity.Property(s => s.Name).HasMaxLength(50).IsRequired();
         });
     }
 }

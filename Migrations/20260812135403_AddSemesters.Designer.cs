@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using StudentManagementSystem.Data;
@@ -11,9 +12,11 @@ using StudentManagementSystem.Data;
 namespace StudentManagementSystem.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260812135403_AddSemesters")]
+    partial class AddSemesters
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -108,27 +111,15 @@ namespace StudentManagementSystem.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal?>("CaScore")
-                        .HasColumnType("decimal(5,2)");
-
                     b.Property<int>("CourseId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("EnrollmentDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<decimal?>("ExamScore")
-                        .HasColumnType("decimal(5,2)");
-
                     b.Property<string>("Grade")
                         .HasMaxLength(5)
                         .HasColumnType("character varying(5)");
-
-                    b.Property<bool>("IsResultPublished")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("ResultPublishedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Semester")
                         .IsRequired()

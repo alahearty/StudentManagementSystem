@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using Serilog;
 using Serilog.Events;
@@ -28,7 +29,24 @@ public static class LogConfig
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
+        EnableBindingDiagnostics();
+
         Log.Information("Logging initialized. Logs: {LogPath}", logPath);
+    }
+
+    private static void EnableBindingDiagnostics()
+    {
+        try
+        {
+            PresentationTraceSources.Refresh();
+            PresentationTraceSources.DataBindingSource.Listeners.Clear();
+            PresentationTraceSources.DataBindingSource.Listeners.Add(new SerilogTraceListener());
+            PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Warning;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to attach binding diagnostics");
+        }
     }
 
     public static void Shutdown()
